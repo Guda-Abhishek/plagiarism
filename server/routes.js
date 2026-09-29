@@ -35,7 +35,16 @@ export function registerRoutes(app) {
         const matchedSources = [];
 
         for (const url of urls) {
-          const content = await fetchPageContent(url);
+          const contentResult = await fetchPageContent(url);
+          if (contentResult.error) {
+            matchedSources.push({
+              url,
+              similarity: 0,
+              status: "unavailable"
+            });
+            continue;
+          }
+          const content = contentResult.text;
           if (content && content.length > 100) {
             const cosineSim = calculateSimilarity(sentence, content);
             const ngramSim = nGramSimilarity(sentence, content, 5);
@@ -56,6 +65,7 @@ export function registerRoutes(app) {
               matchedSources.push({
                 url,
                 similarity: Math.round(similarity * 100),
+                status: similarity > 0.5 ? "verified" : "possible"
               });
             }
           }
@@ -74,11 +84,12 @@ export function registerRoutes(app) {
       }
 
       const totalSimilarity = results.reduce((sum, r) => sum + r.similarity, 0);
-      const overallScore = Math.round(totalSimilarity / results.length);
+      const overallScore = Math.round(totalSimilarity / results.length) || 0;
       const plagiarizedCount = results.filter((r) => r.isPlagiarized).length;
-      const plagiarismPercentage = Math.round(
-        (plagiarizedCount / results.length) * 100
-      );
+      
+      const totalTextLength = results.reduce((sum, r) => sum + r.sentence.length, 0) || 1;
+      const plagiarizedTextLength = results.filter(r => r.isPlagiarized).reduce((sum, r) => sum + r.sentence.length, 0);
+      const plagiarismPercentage = Math.round((plagiarizedTextLength / totalTextLength) * 100);
 
       console.log("Plagiarism check complete. Overall score:", overallScore);
 

@@ -7,6 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, FileSearch, AlertCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { checkTextSchema } from "../../../shared/schema";
+import * as mammoth from "mammoth";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 const Index = () => {
   const [text, setText] = useState("");
@@ -14,15 +18,44 @@ const Index = () => {
   const [result, setResult] = useState(null);
   const fileInputRef = useRef(null);
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setText(event.target.result);
-    };
-    reader.readAsText(file);
+    try {
+      const extension = file.name.split('.').pop().toLowerCase();
+      if (extension === 'txt') {
+        const text = await file.text();
+        setText(text);
+      } else if (extension === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        setText(result.value);
+      } else if (extension === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          fullText += content.items.map(item => item.str).join(' ') + ' \n';
+        }
+        setText(fullText);
+      } else {
+        toast({
+          title: "Unsupported file",
+          description: "Please upload .txt, .docx, or .pdf",
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error("File read error:", err);
+      toast({
+        title: "Error reading file",
+        description: "Could not extract text from the file.",
+        variant: "destructive"
+      });
+    }
     e.target.value = ''; // Reset input
   };
   const {
@@ -118,14 +151,14 @@ const Index = () => {
                   </p>
                   <input
                     type="file"
-                    accept=".txt"
+                    accept=".txt,.docx,.pdf"
                     className="hidden"
                     ref={fileInputRef}
                     onChange={handleFileUpload}
                   />
                   <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload .txt File
+                    Upload File (.txt, .docx, .pdf)
                   </Button>
                 </div>
                 <Button data-testid="button-check-plagiarism" onClick={handleCheck} disabled={isChecking || text.length < 100} size="lg">
@@ -195,14 +228,20 @@ const Index = () => {
                         {item.sources.length > 0 && <div className="mt-2 pt-2 border-t border-current/20">
                             <p className="text-xs font-semibold mb-1">Potential Sources:</p>
                             <div className="space-y-1">
-                              {item.sources.map((source, idx) => <div key={idx} className="flex items-start gap-2">
-                                  <a href={source.url} target="_blank" rel="noopener noreferrer" data-testid={`link-source-${index}-${idx}`} className={`flex-1 text-xs hover:underline truncate ${source.similarity >= 50 ? "text-red-600 dark:text-red-400 font-semibold" : "text-orange-600 dark:text-orange-400"}`}>
-                                    {source.url}
-                                  </a>
-                                  <span className={`text-xs font-bold ${source.similarity >= 50 ? "text-red-600 dark:text-red-400" : "text-orange-600 dark:text-orange-400"}`} data-testid={`text-source-similarity-${index}-${idx}`}>
-                                    {source.similarity}%
-                                  </span>
-                                </div>)}
+                              {item.sources.map((source, idx) => {
+                                const isUnavailable = source.status === "unavailable";
+                                const isVerified = source.status === "verified" || source.similarity >= 50;
+                                return (
+                                  <div key={idx} className="flex items-start gap-2">
+                                    <a href={source.url} target="_blank" rel="noopener noreferrer" data-testid={`link-source-${index}-${idx}`} className={`flex-1 text-xs hover:underline truncate ${isUnavailable ? "text-gray-400 line-through" : isVerified ? "text-red-600 dark:text-red-400 font-semibold" : "text-orange-600 dark:text-orange-400"}`}>
+                                      {source.url}
+                                    </a>
+                                    <span className={`text-xs font-bold ${isUnavailable ? "text-gray-400" : isVerified ? "text-red-600 dark:text-red-400" : "text-orange-600 dark:text-orange-400"}`} data-testid={`text-source-similarity-${index}-${idx}`}>
+                                      {isUnavailable ? "Unavailable" : `${source.similarity}% (${source.status || 'possible'})`}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>}
                       </div>)}

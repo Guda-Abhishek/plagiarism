@@ -47,7 +47,11 @@ export async function searchWeb(query) {
       )
       .slice(0, 8);
 
-    urls.push(...ddgUrls.filter(url => url !== null));
+    const filteredUrls = ddgUrls.filter(url => 
+      url !== null && 
+      !url.includes("drksanthisree.com/about")
+    );
+    urls.push(...filteredUrls);
   } catch (error) {
     console.error("DuckDuckGo search error:", error);
   }
@@ -55,13 +59,11 @@ export async function searchWeb(query) {
   try {
     const searchQuery = encodeURIComponent(query.slice(0, 150));
     const crossrefUrl = `https://api.crossref.org/works?query=${searchQuery}&rows=5`;
-
     const response = await fetch(crossrefUrl);
     const data = await response.json();
-
     if (data.message?.items) {
       for (const item of data.message.items) {
-        if (item.URL) {
+        if (item.URL && !item.URL.includes("drksanthisree.com/about")) {
           urls.push(item.URL);
         }
       }
@@ -70,7 +72,20 @@ export async function searchWeb(query) {
     console.error("CrossRef search error:", error);
   }
 
-  return [...new Set(urls)].slice(0, 10);
+  try {
+    const searchQuery = encodeURIComponent(query.slice(0, 150));
+    const arxivUrl = `http://export.arxiv.org/api/query?search_query=all:${searchQuery}&start=0&max_results=3`;
+    const response = await fetch(arxivUrl);
+    const data = await response.text();
+    // simplistic xml parsing for <id> tag which contains the URL
+    const idMatches = data.match(/<id>(http:\/\/arxiv\.org\/abs\/[^<]+)<\/id>/g) || [];
+    const arxivUrls = idMatches.map(id => id.replace('<id>', '').replace('</id>', ''));
+    urls.push(...arxivUrls);
+  } catch (error) {
+    console.error("ArXiv search error:", error);
+  }
+
+  return [...new Set(urls)].slice(0, 15);
 }
 
 export async function fetchPageContent(url) {
@@ -93,7 +108,7 @@ export async function fetchPageContent(url) {
 
     if (!response.ok) {
       console.log(`Failed to fetch ${url}: ${response.status}`);
-      return "";
+      return { text: null, error: `HTTP ${response.status}` };
     }
 
     const html = await response.text();
@@ -110,10 +125,10 @@ export async function fetchPageContent(url) {
       .replace(/\s+/g, " ")
       .trim();
 
-    return text.slice(0, 5000);
+    return { text: text.slice(0, 5000), error: null };
   } catch (error) {
     console.error(`Error fetching ${url}:`, error);
-    return "";
+    return { text: null, error: error.message };
   }
 }
 

@@ -11,6 +11,7 @@ export const sentenceResultSchema = z.object({
     z.object({
       url: z.string(),
       similarity: z.number(),
+      status: z.enum(["verified", "possible", "unavailable"]).optional(),
     })
   ),
   isPlagiarized: z.boolean(),
