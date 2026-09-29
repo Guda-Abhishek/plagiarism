@@ -22,7 +22,7 @@ export function registerRoutes(app) {
       console.log("Split into", sentences.length, "sentences");
 
       const results = [];
-      const limit = Math.min(sentences.length, 20);
+      const limit = sentences.length;
 
       for (let i = 0; i < limit; i++) {
         const sentence = sentences[i];

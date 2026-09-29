@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, FileSearch, AlertCircle } from "lucide-react";
+import { Loader2, FileSearch, AlertCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { checkTextSchema } from "../../../shared/schema";
 
@@ -12,6 +12,19 @@ const Index = () => {
   const [text, setText] = useState("");
   const [isChecking, setIsChecking] = useState(false);
   const [result, setResult] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setText(event.target.result);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
   const {
     toast
   } = useToast();
@@ -99,9 +112,22 @@ const Index = () => {
             <CardContent className="space-y-4">
               <Textarea data-testid="input-text" placeholder="Paste your text here (minimum 100 characters)..." value={text} onChange={e => setText(e.target.value)} className="min-h-[200px] text-base" />
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm text-muted-foreground" data-testid="text-character-count">
-                  {text.length} characters
-                </p>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm text-muted-foreground" data-testid="text-character-count">
+                    {text.length} characters
+                  </p>
+                  <input
+                    type="file"
+                    accept=".txt"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                  />
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload .txt File
+                  </Button>
+                </div>
                 <Button data-testid="button-check-plagiarism" onClick={handleCheck} disabled={isChecking || text.length < 100} size="lg">
                   {isChecking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isChecking ? "Checking..." : "Check Plagiarism"}
